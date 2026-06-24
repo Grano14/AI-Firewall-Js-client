@@ -1,6 +1,9 @@
 <!DOCTYPE html>
 <html lang="it">
-<head><meta charset="UTF-8"><title>Motore AI - Anonimizzazione</title></head>
+<head>
+    <meta charset="UTF-8">
+    <title>Motore AI - Anonimizzazione</title>
+</head>
 <body>
     <h1>Motore AI Attivo</h1>
     <p id="status">Stato: Inizializzazione modello NER...</p>
@@ -32,20 +35,29 @@
         async function runAnalysis() {
             const text = input.value;
             if (!text || !detector) return;
-            const result = await detector(text, { aggregationStrategy: 'simple' });
+            
+            // CORRETTO: aggregation_strategy con l'underscore
+            const result = await detector(text, { aggregation_strategy: 'simple' });
             output.innerText = JSON.stringify(result, null, 2);
         }
 
         btn.addEventListener('click', runAnalysis);
 
+        // Ascolta i messaggi inviati dall'estensione Chrome
         window.addEventListener('message', async (event) => {
             if (event.data && event.data.text && detector) {
                 try {
-                    const result = await detector(event.data.text, { aggregationStrategy: 'simple' });
+                    // CORRETTO: aggregation_strategy anche qui per le richieste dell'estensione
+                    const result = await detector(event.data.text, { aggregation_strategy: 'simple' });
+                    
+                    // Risponde al popup inviando il risultato aggregato pulito
                     event.source.postMessage({ result, requestId: event.data.requestId }, event.origin);
-                } catch (err) { event.source.postMessage({ error: err.message }, event.origin); }
+                } catch (err) { 
+                    event.source.postMessage({ error: err.message }, event.origin); 
+                }
             }
         });
+        
         init();
     </script>
 </body>
