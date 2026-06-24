@@ -2,20 +2,25 @@
 <html lang="it">
 <head>
     <meta charset="UTF-8">
-    <title>Test Motore AI</title>
+    <title>Motore AI Remoto</title>
 </head>
 <body>
-    <h1>Motore AI Interno</h1>
-    <p id="status">Stato: Caricamento modello (attendi)...</p>
+    <h1>Motore AI Attivo</h1>
+    <p id="status">Stato: Inizializzazione in corso (caricamento pesi remoti)...</p>
 
     <div id="test-interface">
-        <textarea id="input-text" placeholder="Scrivi una frase in inglese..."></textarea>
+        <textarea id="input-text" placeholder="Scrivi una frase..."></textarea>
         <button id="btn-analyze" disabled>Analizza</button>
         <pre id="output"></pre>
     </div>
 
     <script type="module">
-        import { pipeline } from 'https://cdn.jsdelivr.net/npm/@xenova/transformers@2.17.2';
+        // Importiamo env per gestire le configurazioni di rete
+        import { env, pipeline } from 'https://cdn.jsdelivr.net/npm/@xenova/transformers@2.17.2';
+
+        // CONFIGURAZIONE: Impediamo la ricerca di file locali
+        env.allowLocalModels = false;
+        env.useBrowserCache = true; // Sfruttiamo la cache del browser dopo il 1° download
 
         const status = document.getElementById('status');
         const btn = document.getElementById('btn-analyze');
@@ -26,19 +31,22 @@
 
         async function init() {
             try {
-                // Caricamento del modello
+                // Caricamento dal repository ufficiale (non cercare file locali)
                 classifier = await pipeline('sentiment-analysis', 'Xenova/distilbert-base-uncased-finetuned-sst-2-english');
+                
                 status.innerText = "Stato: Modello caricato! Pronto.";
                 btn.disabled = false;
+                console.log("Motore pronto.");
             } catch (err) {
-                status.innerText = "Errore: " + err.message;
+                status.innerText = "Errore durante il caricamento: " + err.message;
+                console.error("Dettaglio:", err);
             }
         }
 
-        // Logica di analisi
+        // Analisi tramite interfaccia interna
         async function runAnalysis() {
             const text = input.value;
-            if (!text) return;
+            if (!text || !classifier) return;
             
             output.innerText = "Analisi in corso...";
             const result = await classifier(text);
@@ -47,11 +55,20 @@
 
         btn.addEventListener('click', runAnalysis);
 
-        // Manteniamo anche il listener per l'estensione (il "ponte")
+        // PONTE: Comunicazione con l'estensione
         window.addEventListener('message', async (event) => {
-            if (event.data.text && classifier) {
-                const result = await classifier(event.data.text);
-                event.source.postMessage({ result, requestId: event.data.requestId }, event.origin);
+            // Verifica che il messaggio contenga il testo e il modello sia pronto
+            if (event.data && event.data.text && classifier) {
+                try {
+                    const result = await classifier(event.data.text);
+                    // Rispondi al mittente (l'estensione)
+                    event.source.postMessage({ 
+                        result: result, 
+                        requestId: event.data.requestId 
+                    }, event.origin);
+                } catch (err) {
+                    event.source.postMessage({ error: err.message }, event.origin);
+                }
             }
         });
 
