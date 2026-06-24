@@ -2,66 +2,61 @@
 <html lang="it">
 <head>
     <meta charset="UTF-8">
-    <title>Motore AI Remoto</title>
+    <title>Motore AI - Anonimizzazione</title>
 </head>
 <body>
     <h1>Motore AI Attivo</h1>
-    <p id="status">Stato: Inizializzazione in corso (caricamento pesi remoti)...</p>
+    <p id="status">Stato: Inizializzazione modello NER (Riconoscimento entità)...</p>
 
     <div id="test-interface">
-        <textarea id="input-text" placeholder="Scrivi una frase..."></textarea>
-        <button id="btn-analyze" disabled>Analizza</button>
+        <textarea id="input-text" placeholder="Scrivi una frase con nomi o luoghi..."></textarea>
+        <button id="btn-analyze" disabled>Analizza Dati Sensibili</button>
         <pre id="output"></pre>
     </div>
 
     <script type="module">
-        // Importiamo env per gestire le configurazioni di rete
         import { env, pipeline } from 'https://cdn.jsdelivr.net/npm/@xenova/transformers@2.17.2';
 
-        // CONFIGURAZIONE: Impediamo la ricerca di file locali
         env.allowLocalModels = false;
-        env.useBrowserCache = true; // Sfruttiamo la cache del browser dopo il 1° download
+        env.useBrowserCache = true;
 
         const status = document.getElementById('status');
         const btn = document.getElementById('btn-analyze');
         const input = document.getElementById('input-text');
         const output = document.getElementById('output');
 
-        let classifier;
+        let detector;
 
         async function init() {
             try {
-                // Caricamento dal repository ufficiale (non cercare file locali)
-                classifier = await pipeline('sentiment-analysis', 'Xenova/distilbert-base-uncased-finetuned-sst-2-english');
+                // Carichiamo il modello dslim/bert-base-NER
+                detector = await pipeline('token-classification', 'Xenova/bert-base-NER');
                 
-                status.innerText = "Stato: Modello caricato! Pronto.";
+                status.innerText = "Stato: Modello NER caricato! Pronto per anonimizzare.";
                 btn.disabled = false;
-                console.log("Motore pronto.");
             } catch (err) {
-                status.innerText = "Errore durante il caricamento: " + err.message;
-                console.error("Dettaglio:", err);
+                status.innerText = "Errore: " + err.message;
             }
         }
 
-        // Analisi tramite interfaccia interna
         async function runAnalysis() {
             const text = input.value;
-            if (!text || !classifier) return;
+            if (!text || !detector) return;
             
             output.innerText = "Analisi in corso...";
-            const result = await classifier(text);
+            // aggreggationStrategy: 'simple' unisce i token spezzati (es: "Mario" "Rossi")
+            const result = await detector(text, { aggregationStrategy: 'simple' });
             output.innerText = JSON.stringify(result, null, 2);
         }
 
         btn.addEventListener('click', runAnalysis);
 
-        // PONTE: Comunicazione con l'estensione
         window.addEventListener('message', async (event) => {
-            // Verifica che il messaggio contenga il testo e il modello sia pronto
-            if (event.data && event.data.text && classifier) {
+            if (event.data && event.data.text && detector) {
                 try {
-                    const result = await classifier(event.data.text);
-                    // Rispondi al mittente (l'estensione)
+                    // Analizziamo il testo ricevuto dall'estensione
+                    const result = await detector(event.data.text, { aggregationStrategy: 'simple' });
+                    
                     event.source.postMessage({ 
                         result: result, 
                         requestId: event.data.requestId 
