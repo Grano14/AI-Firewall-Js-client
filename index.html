@@ -1,25 +1,61 @@
 <!DOCTYPE html>
-<html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <title>Test Motore AI</title>
+</head>
 <body>
-    <h1>Motore AI Attivo</h1>
+    <h1>Motore AI Interno</h1>
+    <p id="status">Stato: Caricamento modello (attendi)...</p>
+
+    <div id="test-interface">
+        <textarea id="input-text" placeholder="Scrivi una frase in inglese..."></textarea>
+        <button id="btn-analyze" disabled>Analizza</button>
+        <pre id="output"></pre>
+    </div>
+
     <script type="module">
-        import { pipeline } from 'https://cdn.jsdelivr.net/npm/@xenova/transformers';
+        import { pipeline } from 'https://cdn.jsdelivr.net/npm/@xenova/transformers@2.17.2';
 
-        // Caricamento del modello
-        const classifier = await pipeline('sentiment-analysis', 'Xenova/distilbert-base-uncased-finetuned-sst-2-english');
-        console.log("Modello caricato con successo!");
+        const status = document.getElementById('status');
+        const btn = document.getElementById('btn-analyze');
+        const input = document.getElementById('input-text');
+        const output = document.getElementById('output');
 
-        // Ascolto dei comandi
-        window.addEventListener('message', async (event) => {
-            // Sostituisci con l'ID della tua futura estensione
-            // Per ora usa '*' per testare, poi lo restringiamo
-            const { text, requestId } = event.data;
+        let classifier;
+
+        async function init() {
+            try {
+                // Caricamento del modello
+                classifier = await pipeline('sentiment-analysis', 'Xenova/distilbert-base-uncased-finetuned-sst-2-english');
+                status.innerText = "Stato: Modello caricato! Pronto.";
+                btn.disabled = false;
+            } catch (err) {
+                status.innerText = "Errore: " + err.message;
+            }
+        }
+
+        // Logica di analisi
+        async function runAnalysis() {
+            const text = input.value;
+            if (!text) return;
             
-            if (text) {
-                const result = await classifier(text);
-                event.source.postMessage({ result, requestId }, event.origin);
+            output.innerText = "Analisi in corso...";
+            const result = await classifier(text);
+            output.innerText = JSON.stringify(result, null, 2);
+        }
+
+        btn.addEventListener('click', runAnalysis);
+
+        // Manteniamo anche il listener per l'estensione (il "ponte")
+        window.addEventListener('message', async (event) => {
+            if (event.data.text && classifier) {
+                const result = await classifier(event.data.text);
+                event.source.postMessage({ result, requestId: event.data.requestId }, event.origin);
             }
         });
+
+        init();
     </script>
 </body>
 </html>
