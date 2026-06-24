@@ -1,17 +1,22 @@
 <!DOCTYPE html>
 <html lang="it">
-<head><meta charset="UTF-8"><title>Motore AI - Anonimizzazione</title></head>
+<head>
+    <meta charset="UTF-8">
+    <title>Motore AI - Anonimizzazione</title>
+</head>
 <body>
     <h1>Motore AI Attivo</h1>
-    <p id="status">Stato: Inizializzazione modello NER...</p>
+    <p id="status">Stato: Inizializzazione modello NER Multilingua...</p>
+
     <div id="test-interface">
-        <textarea id="input-text" placeholder="Scrivi una frase..."></textarea>
-        <button id="btn-analyze" disabled>Analizza</button>
+        <textarea id="input-text" placeholder="Scrivi una frase con nomi o luoghi..."></textarea>
+        <button id="btn-analyze" disabled>Analizza Dati Sensibili</button>
         <pre id="output"></pre>
     </div>
 
     <script type="module">
         import { env, pipeline } from 'https://cdn.jsdelivr.net/npm/@xenova/transformers@2.17.2';
+
         env.allowLocalModels = false;
         env.useBrowserCache = true;
 
@@ -19,20 +24,26 @@
         const btn = document.getElementById('btn-analyze');
         const input = document.getElementById('input-text');
         const output = document.getElementById('output');
+
         let detector;
 
         async function init() {
             try {
-                detector = await pipeline('token-classification', 'Xenova/bert-base-NER');
-                status.innerText = "Stato: Modello NER caricato!";
+                // Modello multilingua ottimizzato per riconoscere nomi italiani e internazionali
+                detector = await pipeline('token-classification', 'Xenova/bert-base-multilingual-cased-ner');
+                status.innerText = "Stato: Modello NER caricato! Pronto per anonimizzare.";
                 btn.disabled = false;
-            } catch (err) { status.innerText = "Errore: " + err.message; }
+            } catch (err) {
+                status.innerText = "Errore: " + err.message;
+            }
         }
 
         async function runAnalysis() {
             const text = input.value;
             if (!text || !detector) return;
-            const result = await detector(text, { aggregationStrategy: 'simple' });
+            
+            output.innerText = "Analisi in corso...";
+            const result = await detector(text, { aggregationStrategy: 'first' });
             output.innerText = JSON.stringify(result, null, 2);
         }
 
@@ -41,11 +52,28 @@
         window.addEventListener('message', async (event) => {
             if (event.data && event.data.text && detector) {
                 try {
-                    const result = await detector(event.data.text, { aggregationStrategy: 'simple' });
-                    event.source.postMessage({ result, requestId: event.data.requestId }, event.origin);
-                } catch (err) { event.source.postMessage({ error: err.message }, event.origin); }
+                    // aggregationStrategy: 'first' unisce le sillabe spezzate in parole intere in modo pulito
+                    const rawResult = await detector(event.data.text, { 
+                        aggregationStrategy: 'first'
+                    });
+                    
+                    // Pulizia dell'output prima di inviarlo al popup
+                    const cleanResult = rawResult.map(ent => ({
+                        word: ent.word,
+                        entity: ent.entity_group || ent.entity,
+                        score: ent.score
+                    }));
+
+                    event.source.postMessage({ 
+                        result: cleanResult, 
+                        requestId: event.data.requestId 
+                    }, event.origin);
+                } catch (err) {
+                    event.source.postMessage({ error: err.message }, event.origin);
+                }
             }
         });
+
         init();
     </script>
 </body>
