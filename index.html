@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html>
+<body>
+    <h1>Motore AI Attivo</h1>
+    <script type="module">
+        import { pipeline } from 'https://cdn.jsdelivr.net/npm/@xenova/transformers';
+
+        // Caricamento del modello
+        const classifier = await pipeline('sentiment-analysis', 'Xenova/distilbert-base-uncased-finetuned-sst-2-english');
+        console.log("Modello caricato con successo!");
+
+        // Ascolto dei comandi
+        window.addEventListener('message', async (event) => {
+            // Sostituisci con l'ID della tua futura estensione
+            // Per ora usa '*' per testare, poi lo restringiamo
+            const { text, requestId } = event.data;
+            
+            if (text) {
+                const result = await classifier(text);
+                event.source.postMessage({ result, requestId }, event.origin);
+            }
+        });
+    </script>
+</body>
+</html>
